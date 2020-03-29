@@ -22,6 +22,7 @@
 /*
  * Copyright (c) 2010, Oracle and/or its affiliates. All rights reserved.
  * Copyright 2013 Nexenta Systems, Inc.  All rights reserved.
+ * Copyright 2015 Joyent, Inc.
  * Copyright (c) 2016 by Delphix. All rights reserved.
  */
 
@@ -44,6 +45,7 @@
 
 #include <inet/common.h>
 #include <inet/ip.h>
+#include <inet/ip_impl.h>
 #include <inet/tcp.h>
 #include <inet/tcp_impl.h>
 #include <inet/proto_set.h>
@@ -173,6 +175,16 @@ tcp_bind_hash_remove(tcp_t *tcp)
 
 	ASSERT(lockp != NULL);
 	mutex_enter(lockp);
+
+	/* Destroy any association with SO_REUSEPORT group */
+	if (connp->conn_rg_bind != NULL) {
+		if (conn_rg_remove(connp->conn_rg_bind, connp) == 0) {
+			/* Last one out turns off the lights */
+			conn_rg_destroy(connp->conn_rg_bind);
+		}
+		connp->conn_rg_bind = NULL;
+	}
+
 	if (tcp->tcp_ptpbhn) {
 		tcpnext = tcp->tcp_bind_hash_port;
 		if (tcpnext != NULL) {
@@ -480,9 +492,10 @@ tcp_bind_select_lport(tcp_t *tcp, in_port_t *requested_port_ptr,
 		connp->conn_mlp_type = mlptype;
 	}
 
+	int errcode;
 	allocated_port = tcp_bindi(tcp, requested_port, &v6addr,
 	    connp->conn_reuseaddr, B_FALSE, bind_to_req_port_only,
-	    user_specified);
+	    user_specified, &errcode);
 
 	if (allocated_port == 0) {
 		connp->conn_mlp_type = mlptSingle;
@@ -497,7 +510,12 @@ tcp_bind_select_lport(tcp_t *tcp, in_port_t *requested_port_ptr,
 				    SL_ERROR|SL_TRACE,
 				    "tcp_bind: requested addr busy");
 			}
-			return (-TADDRBUSY);
+
+			if (errcode == (-TNOADDR)) {
+				errcode = (-TADDRBUSY);
+			}
+
+			return (errcode);
 		} else {
 			/* If we are out of ports, fail the bind. */
 			if (connp->conn_debug) {
@@ -638,13 +656,12 @@ tcp_bind_check(conn_t *connp, struct sockaddr *sa, socklen_t len, cred_t *cr,
 }
 
 /*
- * If the "bind_to_req_port_only" parameter is set, if the requested port
- * number is available, return it, If not return 0
+ * If the "bind_to_req_port_only" parameter is set and the requested port
+ * number is available, return it (else return 0).
  *
- * If "bind_to_req_port_only" parameter is not set and
- * If the requested port number is available, return it.  If not, return
- * the first anonymous port we happen across.  If no anonymous ports are
- * available, return 0. addr is the requested local address, if any.
+ * If "bind_to_req_port_only" parameter is not set and the requested port
+ * number is available, return it.  If not, return the first anonymous port we
+ * happen across.  If no anonymous ports are available, return 0.
  *
  * In either case, when succeeding update the tcp_t to record the port number
  * and insert it in the bind hash table.
@@ -656,7 +673,8 @@ tcp_bind_check(conn_t *connp, struct sockaddr *sa, socklen_t len, cred_t *cr,
 in_port_t
 tcp_bindi(tcp_t *tcp, in_port_t port, const in6_addr_t *laddr,
     int reuseaddr, boolean_t quick_connect,
-    boolean_t bind_to_req_port_only, boolean_t user_specified)
+    boolean_t bind_to_req_port_only, boolean_t user_specified,
+    int *errcode)
 {
 	/* number of times we have run around the loop */
 	int count = 0;
@@ -664,6 +682,8 @@ tcp_bindi(tcp_t *tcp, in_port_t port, const in6_addr_t *laddr,
 	int loopmax;
 	conn_t *connp = tcp->tcp_connp;
 	tcp_stack_t	*tcps = tcp->tcp_tcps;
+	boolean_t reuseport = connp->conn_reuseport;
+	*errcode = (-TNOADDR);
 
 	/*
 	 * Lookup for free addresses is done in a loop and "loopmax"
@@ -700,6 +720,7 @@ tcp_bindi(tcp_t *tcp, in_port_t port, const in6_addr_t *laddr,
 		tf_t		*tbf;
 		tcp_t		*ltcp;
 		conn_t		*lconnp;
+		boolean_t	attempt_reuse = B_FALSE;
 
 		lport = htons(port);
 
@@ -726,6 +747,7 @@ tcp_bindi(tcp_t *tcp, in_port_t port, const in6_addr_t *laddr,
 		for (; ltcp != NULL; ltcp = ltcp->tcp_bind_hash_port) {
 			boolean_t not_socket;
 			boolean_t exclbind;
+			boolean_t addrmatch;
 
 			lconnp = ltcp->tcp_connp;
 
@@ -831,22 +853,35 @@ tcp_bindi(tcp_t *tcp, in_port_t port, const in6_addr_t *laddr,
 			    &lconnp->conn_faddr_v6)))
 				continue;
 
+			addrmatch = IN6_ARE_ADDR_EQUAL(laddr,
+			    &lconnp->conn_bound_addr_v6);
+
+			if (addrmatch && reuseport && bind_to_req_port_only &&
+			    (ltcp->tcp_state == TCPS_BOUND ||
+			    ltcp->tcp_state == TCPS_LISTEN)) {
+				/*
+				 * This entry is bound to the exact same
+				 * address and port.  If SO_REUSEPORT is set on
+				 * the calling socket, attempt to reuse this
+				 * binding if it too had SO_REUSEPORT enabled
+				 * when it was bound.
+				 */
+				attempt_reuse = (lconnp->conn_rg_bind != NULL);
+				break;
+			}
+
 			if (!reuseaddr) {
 				/*
-				 * No socket option SO_REUSEADDR.
-				 * If existing port is bound to
-				 * a non-wildcard IP address
-				 * and the requesting stream is
-				 * bound to a distinct
-				 * different IP addresses
-				 * (non-wildcard, also), keep
-				 * going.
+				 * No socket option SO_REUSEADDR.  If an
+				 * existing port is bound to a non-wildcard IP
+				 * address and the requesting stream is bound
+				 * to a distinct different IP address
+				 * (non-wildcard, also), keep going.
 				 */
 				if (!V6_OR_V4_INADDR_ANY(*laddr) &&
 				    !V6_OR_V4_INADDR_ANY(
 				    lconnp->conn_bound_addr_v6) &&
-				    !IN6_ARE_ADDR_EQUAL(laddr,
-				    &lconnp->conn_bound_addr_v6))
+				    !addrmatch)
 					continue;
 				if (ltcp->tcp_state >= TCPS_BOUND) {
 					/*
@@ -861,27 +896,44 @@ tcp_bindi(tcp_t *tcp, in_port_t port, const in6_addr_t *laddr,
 				 * socket option SO_REUSEADDR is set on the
 				 * binding tcp_t.
 				 *
-				 * If two streams are bound to
-				 * same IP address or both addr
-				 * and bound source are wildcards
-				 * (INADDR_ANY), we want to stop
-				 * searching.
-				 * We have found a match of IP source
-				 * address and source port, which is
-				 * refused regardless of the
-				 * SO_REUSEADDR setting, so we break.
+				 * If two streams are bound to the same IP
+				 * address or both addr and bound source are
+				 * wildcards (INADDR_ANY), we want to stop
+				 * searching.  We have found a match of IP
+				 * source address and source port, which is
+				 * refused regardless of the SO_REUSEADDR
+				 * setting, so we break.
 				 */
-				if (IN6_ARE_ADDR_EQUAL(laddr,
-				    &lconnp->conn_bound_addr_v6) &&
+				if (addrmatch &&
 				    (ltcp->tcp_state == TCPS_LISTEN ||
 				    ltcp->tcp_state == TCPS_BOUND))
 					break;
 			}
 		}
-		if (ltcp != NULL) {
+		if (ltcp != NULL && !attempt_reuse) {
 			/* The port number is busy */
 			mutex_exit(&tbf->tf_lock);
 		} else {
+			if (attempt_reuse) {
+				int err;
+				conn_rg_t *rg;
+
+				ASSERT(ltcp != NULL);
+				ASSERT(ltcp->tcp_connp != NULL);
+				ASSERT(ltcp->tcp_connp->conn_rg_bind != NULL);
+				ASSERT(connp != NULL);
+				ASSERT(connp->conn_rg_bind == NULL);
+
+				err = conn_rg_insert(
+				    lconnp->conn_rg_bind, connp);
+				if (err != 0) {
+					mutex_exit(&tbf->tf_lock);
+					*errcode = err;
+					return (0);
+				}
+				connp->conn_rg_bind = lconnp->conn_rg_bind;
+			}
+
 			/*
 			 * This port is ours. Insert in fanout and mark as
 			 * bound to prevent others from getting the port
@@ -892,6 +944,20 @@ tcp_bindi(tcp_t *tcp, in_port_t port, const in6_addr_t *laddr,
 			    ip_xmit_attr_t *, connp->conn_ixa,
 			    void, NULL, tcp_t *, tcp, void, NULL,
 			    int32_t, TCPS_IDLE);
+
+			/*
+			 * If we are the first here and have SO_REUSEPORT set,
+			 * set up connp->conn_rg_bind
+			 */
+			if (connp->conn_reuseport &&
+			    (connp->conn_rg_bind == NULL)) {
+				conn_rg_t *rg = conn_rg_init(connp);
+				if (rg == NULL) {
+					*errcode = ENOMEM;
+					return (0);
+				}
+				connp->conn_rg_bind = rg;
+			}
 
 			connp->conn_lport = htons(port);
 

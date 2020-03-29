@@ -1029,6 +1029,16 @@ tcp_fallback(sock_lower_handle_t proto_handle, queue_t *q,
 	}
 
 	/*
+	 * Do not allow fallback on connections making use of SO_REUSEPORT.
+	 */
+	if (connp->conn_rg_bind != NULL) {
+		freeb(stropt_mp);
+		freeb(ordrel_mp);
+		squeue_synch_exit(connp);
+		return (EINVAL);
+	}
+
+	/*
 	 * Both endpoints must be of the same type (either STREAMS or
 	 * non-STREAMS) for fusion to be enabled. So if we are fused,
 	 * we have to unfuse.
