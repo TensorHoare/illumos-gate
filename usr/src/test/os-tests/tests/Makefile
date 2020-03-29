@@ -24,6 +24,7 @@ SUBDIRS =       \
 		libtopo \
 		pf_key \
 		poll \
+		reuseport \
 		sdevfs \
 		secflags \
 		sigqueue \

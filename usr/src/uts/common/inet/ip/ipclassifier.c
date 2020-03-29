@@ -20,6 +20,7 @@
  */
 /*
  * Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+ * Copyright 2015 Joyent, Inc.
  * Copyright 2019 OmniOS Community Edition (OmniOSce) Association.
  * Copyright 2020 Joyent, Inc.
  */
@@ -871,67 +872,91 @@ ipcl_hash_remove_locked(conn_t *connp, connf_t	*connfp)
 	mutex_exit(&(connfp)->connf_lock);				\
 }
 
-#define	IPCL_HASH_INSERT_BOUND(connfp, connp) {				\
-	conn_t *pconnp = NULL, *nconnp;					\
-	IPCL_HASH_REMOVE((connp));					\
-	mutex_enter(&(connfp)->connf_lock);				\
-	nconnp = (connfp)->connf_head;					\
-	while (nconnp != NULL &&					\
-	    !_IPCL_V4_MATCH_ANY(nconnp->conn_laddr_v6)) {		\
-		pconnp = nconnp;					\
-		nconnp = nconnp->conn_next;				\
-	}								\
-	if (pconnp != NULL) {						\
-		pconnp->conn_next = (connp);				\
-		(connp)->conn_prev = pconnp;				\
-	} else {							\
-		(connfp)->connf_head = (connp);				\
-	}								\
-	if (nconnp != NULL) {						\
-		(connp)->conn_next = nconnp;				\
-		nconnp->conn_prev = (connp);				\
-	}								\
-	(connp)->conn_fanout = (connfp);				\
-	(connp)->conn_flags = ((connp)->conn_flags & ~IPCL_REMOVED) |	\
-	    IPCL_BOUND;							\
-	CONN_INC_REF(connp);						\
-	mutex_exit(&(connfp)->connf_lock);				\
-}
+/*
+ * When inserting bound or wildcard entries into the hash, ordering rules are
+ * used to facilitate timely and correct lookups.  The order is as follows:
+ * 1. Entries bound to a specific address
+ * 2. Entries bound to INADDR_ANY
+ * 3. Entries bound to ADDR_UNSPECIFIED
+ * Entries in a category which share conn_lport (such as those using
+ * SO_REUSEPORT) will be ordered such that the newest inserted is first.
+ */
 
-#define	IPCL_HASH_INSERT_WILDCARD(connfp, connp) {			\
-	conn_t **list, *prev, *next;					\
-	boolean_t isv4mapped =						\
-	    IN6_IS_ADDR_V4MAPPED(&(connp)->conn_laddr_v6);		\
-	IPCL_HASH_REMOVE((connp));					\
-	mutex_enter(&(connfp)->connf_lock);				\
-	list = &(connfp)->connf_head;					\
-	prev = NULL;							\
-	while ((next = *list) != NULL) {				\
-		if (isv4mapped &&					\
-		    IN6_IS_ADDR_UNSPECIFIED(&next->conn_laddr_v6) &&	\
-		    connp->conn_zoneid == next->conn_zoneid) {		\
-			(connp)->conn_next = next;			\
-			if (prev != NULL)				\
-				prev = next->conn_prev;			\
-			next->conn_prev = (connp);			\
-			break;						\
-		}							\
-		list = &next->conn_next;				\
-		prev = next;						\
-	}								\
-	(connp)->conn_prev = prev;					\
-	*list = (connp);						\
-	(connp)->conn_fanout = (connfp);				\
-	(connp)->conn_flags = ((connp)->conn_flags & ~IPCL_REMOVED) |	\
-	    IPCL_BOUND;							\
-	CONN_INC_REF((connp));						\
-	mutex_exit(&(connfp)->connf_lock);				\
+void
+ipcl_hash_insert_bound(connf_t *connfp, conn_t *connp)
+{
+	conn_t *pconnp, *nconnp;
+
+	IPCL_HASH_REMOVE(connp);
+	mutex_enter(&connfp->connf_lock);
+	nconnp = connfp->connf_head;
+	pconnp = NULL;
+	while (nconnp != NULL) {
+		/*
+		 * Walk though entries associated with the fanout until one is
+		 * found which fulfills any of these conditions:
+		 * 1. Listen address of ADDR_ANY/ADDR_UNSPECIFIED
+		 * 2. Listen port the same as connp
+		 */
+		if (_IPCL_V4_MATCH_ANY(nconnp->conn_laddr_v6) ||
+		    connp->conn_lport == nconnp->conn_lport)
+			break;
+		pconnp = nconnp;
+		nconnp = nconnp->conn_next;
+	}
+	if (pconnp != NULL) {
+		pconnp->conn_next = connp;
+		connp->conn_prev = pconnp;
+	} else {
+		connfp->connf_head = connp;
+	}
+	if (nconnp != NULL) {
+		connp->conn_next = nconnp;
+		nconnp->conn_prev = connp;
+	}
+	connp->conn_fanout = connfp;
+	connp->conn_flags = (connp->conn_flags & ~IPCL_REMOVED) | IPCL_BOUND;
+	CONN_INC_REF(connp);
+	mutex_exit(&connfp->connf_lock);
 }
 
 void
 ipcl_hash_insert_wildcard(connf_t *connfp, conn_t *connp)
 {
-	IPCL_HASH_INSERT_WILDCARD(connfp, connp);
+	conn_t **list, *prev, *next;
+	conn_t *pconnp = NULL, *nconnp;
+	boolean_t isv4mapped = IN6_IS_ADDR_V4MAPPED(&connp->conn_laddr_v6);
+
+	IPCL_HASH_REMOVE(connp);
+	mutex_enter(&connfp->connf_lock);
+	nconnp = connfp->connf_head;
+	pconnp = NULL;
+	while (nconnp != NULL) {
+		if (IN6_IS_ADDR_V4MAPPED_ANY(&nconnp->conn_laddr_v6) &&
+		    isv4mapped && connp->conn_lport == nconnp->conn_lport)
+			break;
+		if (IN6_IS_ADDR_UNSPECIFIED(&nconnp->conn_laddr_v6) &&
+		    (isv4mapped ||
+		    connp->conn_lport == nconnp->conn_lport))
+			break;
+
+		pconnp = nconnp;
+		nconnp = nconnp->conn_next;
+	}
+	if (pconnp != NULL) {
+		pconnp->conn_next = connp;
+		connp->conn_prev = pconnp;
+	} else {
+		connfp->connf_head = connp;
+	}
+	if (nconnp != NULL) {
+		connp->conn_next = nconnp;
+		nconnp->conn_prev = connp;
+	}
+	connp->conn_fanout = connfp;
+	connp->conn_flags = (connp->conn_flags & ~IPCL_REMOVED) | IPCL_BOUND;
+	CONN_INC_REF(connp);
+	mutex_exit(&connfp->connf_lock);
 }
 
 /*
@@ -1037,9 +1062,9 @@ ipcl_sctp_hash_insert(conn_t *connp, in_port_t lport)
 	    IN6_IS_ADDR_V4MAPPED_ANY(&connp->conn_faddr_v6)) {
 		if (IN6_IS_ADDR_UNSPECIFIED(&connp->conn_laddr_v6) ||
 		    IN6_IS_ADDR_V4MAPPED_ANY(&connp->conn_laddr_v6)) {
-			IPCL_HASH_INSERT_WILDCARD(connfp, connp);
+			ipcl_hash_insert_wildcard(connfp, connp);
 		} else {
-			IPCL_HASH_INSERT_BOUND(connfp, connp);
+			ipcl_hash_insert_bound(connfp, connp);
 		}
 	} else {
 		IPCL_HASH_INSERT_CONNECTED(connfp, connp);
@@ -1208,9 +1233,9 @@ ipcl_bind_insert_v4(conn_t *connp)
 		if (connp->conn_faddr_v4 != INADDR_ANY) {
 			IPCL_HASH_INSERT_CONNECTED(connfp, connp);
 		} else if (connp->conn_laddr_v4 != INADDR_ANY) {
-			IPCL_HASH_INSERT_BOUND(connfp, connp);
+			ipcl_hash_insert_bound(connfp, connp);
 		} else {
-			IPCL_HASH_INSERT_WILDCARD(connfp, connp);
+			ipcl_hash_insert_wildcard(connfp, connp);
 		}
 		if (protocol == IPPROTO_RSVP)
 			ill_set_inputfn_all(ipst);
@@ -1222,9 +1247,9 @@ ipcl_bind_insert_v4(conn_t *connp)
 		connfp = &ipst->ips_ipcl_bind_fanout[
 		    IPCL_BIND_HASH(lport, ipst)];
 		if (connp->conn_laddr_v4 != INADDR_ANY) {
-			IPCL_HASH_INSERT_BOUND(connfp, connp);
+			ipcl_hash_insert_bound(connfp, connp);
 		} else {
-			IPCL_HASH_INSERT_WILDCARD(connfp, connp);
+			ipcl_hash_insert_wildcard(connfp, connp);
 		}
 		if (cl_inet_listen != NULL) {
 			ASSERT(connp->conn_ipversion == IPV4_VERSION);
@@ -1274,9 +1299,9 @@ ipcl_bind_insert_v6(conn_t *connp)
 		if (!IN6_IS_ADDR_UNSPECIFIED(&connp->conn_faddr_v6)) {
 			IPCL_HASH_INSERT_CONNECTED(connfp, connp);
 		} else if (!IN6_IS_ADDR_UNSPECIFIED(&connp->conn_laddr_v6)) {
-			IPCL_HASH_INSERT_BOUND(connfp, connp);
+			ipcl_hash_insert_bound(connfp, connp);
 		} else {
-			IPCL_HASH_INSERT_WILDCARD(connfp, connp);
+			ipcl_hash_insert_wildcard(connfp, connp);
 		}
 		break;
 
@@ -1286,9 +1311,9 @@ ipcl_bind_insert_v6(conn_t *connp)
 		connfp = &ipst->ips_ipcl_bind_fanout[
 		    IPCL_BIND_HASH(lport, ipst)];
 		if (!IN6_IS_ADDR_UNSPECIFIED(&connp->conn_laddr_v6)) {
-			IPCL_HASH_INSERT_BOUND(connfp, connp);
+			ipcl_hash_insert_bound(connfp, connp);
 		} else {
-			IPCL_HASH_INSERT_WILDCARD(connfp, connp);
+			ipcl_hash_insert_wildcard(connfp, connp);
 		}
 		if (cl_inet_listen != NULL) {
 			sa_family_t	addr_family;
@@ -1419,9 +1444,9 @@ ipcl_conn_insert_v4(conn_t *connp)
 		if (connp->conn_faddr_v4 != INADDR_ANY) {
 			IPCL_HASH_INSERT_CONNECTED(connfp, connp);
 		} else if (connp->conn_laddr_v4 != INADDR_ANY) {
-			IPCL_HASH_INSERT_BOUND(connfp, connp);
+			ipcl_hash_insert_bound(connfp, connp);
 		} else {
-			IPCL_HASH_INSERT_WILDCARD(connfp, connp);
+			ipcl_hash_insert_wildcard(connfp, connp);
 		}
 		break;
 	}
@@ -1507,9 +1532,9 @@ ipcl_conn_insert_v6(conn_t *connp)
 		if (!IN6_IS_ADDR_UNSPECIFIED(&connp->conn_faddr_v6)) {
 			IPCL_HASH_INSERT_CONNECTED(connfp, connp);
 		} else if (!IN6_IS_ADDR_UNSPECIFIED(&connp->conn_laddr_v6)) {
-			IPCL_HASH_INSERT_BOUND(connfp, connp);
+			ipcl_hash_insert_bound(connfp, connp);
 		} else {
-			IPCL_HASH_INSERT_WILDCARD(connfp, connp);
+			ipcl_hash_insert_wildcard(connfp, connp);
 		}
 		break;
 	}
@@ -1612,6 +1637,17 @@ ipcl_classify_v4(mblk_t *mp, uint8_t protocol, uint_t hdr_len,
 
 		if (connp != NULL) {
 			/* Have a listener at least */
+			if (connp->conn_rg_bind != NULL) {
+				/*
+				 * Have multiple bindings by SO_REUSEPORT,
+				 * do load balancing
+				 */
+				connp = conn_rg_lb_pick(
+				    connp->conn_rg_bind,
+				    ipha->ipha_src,
+				    ipha->ipha_dst,
+				    ports);
+			}
 			CONN_INC_REF(connp);
 			mutex_exit(&bind_connfp->connf_lock);
 			return (connp);
@@ -1646,6 +1682,17 @@ ipcl_classify_v4(mblk_t *mp, uint8_t protocol, uint_t hdr_len,
 		}
 
 		if (connp != NULL) {
+			if (connp->conn_rg_bind != NULL) {
+				/*
+				 * Have multiple bindings by SO_REUSEPORT,
+				 * do load balancing
+				 */
+				connp = conn_rg_lb_pick(
+				    connp->conn_rg_bind,
+				    ipha->ipha_src,
+				    ipha->ipha_dst,
+				    ports);
+			}
 			CONN_INC_REF(connp);
 			mutex_exit(&connfp->connf_lock);
 			return (connp);
@@ -1747,6 +1794,17 @@ ipcl_classify_v6(mblk_t *mp, uint8_t protocol, uint_t hdr_len,
 
 		if (connp != NULL) {
 			/* Have a listner at least */
+			if (connp->conn_rg_bind != NULL) {
+				/*
+				 * Have multiple SO_REUSEPORT bind,
+				 * do load balancing
+				 */
+				connp = conn_rg_lb_pick6(
+				    connp->conn_rg_bind,
+				    &ip6h->ip6_src,
+				    &ip6h->ip6_dst,
+				    ports);
+			}
 			CONN_INC_REF(connp);
 			mutex_exit(&bind_connfp->connf_lock);
 			return (connp);
@@ -1783,6 +1841,17 @@ ipcl_classify_v6(mblk_t *mp, uint8_t protocol, uint_t hdr_len,
 		}
 
 		if (connp != NULL) {
+			if (connp->conn_rg_bind != NULL) {
+				/*
+				 * Have multiple SO_REUSEPORT bind,
+				 * do load balancing
+				 */
+				connp = conn_rg_lb_pick6(
+				    connp->conn_rg_bind,
+				    &ip6h->ip6_src,
+				    &ip6h->ip6_dst,
+				    ports);
+			}
 			CONN_INC_REF(connp);
 			mutex_exit(&connfp->connf_lock);
 			return (connp);
@@ -2779,4 +2848,241 @@ conn_get_socket_info(conn_t *connp, mib2_socketInfoEntry_t *sie)
 	sie->sie_dev = attr.va_rdev;
 
 	return (sie);
+}
+
+/*
+ * SO_REUSEPORT support
+ *
+ * The SO_REUSEPORT option allows multiple socket
+ * to be bound to an identical address, and incoming
+ * connections or datagrams will be distributed among
+ * all the sockets bound to the same address, as per
+ * Linux sematics.
+ *
+ * To support this behaviour, we add conn_rg_t, which
+ * is a local table of all the conn_t belonging to the
+ * same SO_REUSEPORT group. This table will be allocated
+ * when first conn_t gets bind (in tcp_bindi()/udp_do_bind()),
+ * and will be destroyed when the last member of the group
+ * is removed from the bind hash.
+ *
+ * In the ipclassifier, when we find a matching conn_t
+ * for the incoming packet, we check if it's in a SO_REUSEPORT
+ * group (i.e. it's conn_rg_bind pointer is not NULL). If
+ * true, then instead of dispatching the packet to the first
+ * matching conn_t, we try to do load-balancing by picing
+ * a connection from the group, based on a hash value of the
+ * IP 4-tuple.
+ *
+ * The conn_rg_t.connrg_lock is for protecting conn_rg_t
+ * structure, and should only be acquired inside conn_rg_*
+ * funcitons. The conn_rg_bind pointer in conn_t is protected
+ * in the same way as other fields in conn_t.
+ */
+
+/* Max number of members in TCP SO_REUSEPORT group */
+#define	CONN_RG_SIZE_MAX		256
+/* Step size when expanding members array */
+#define	CONN_RG_SIZE_STEP		4
+/* Initial size of members array */
+#define	CONN_RG_SIZE_INIT		4
+
+/* Initialize a conn_rg_t structure */
+conn_rg_t *
+conn_rg_init(conn_t *connp)
+{
+	conn_rg_t *rg;
+	rg = kmem_alloc(sizeof (conn_rg_t), KM_NOSLEEP|KM_NORMALPRI);
+	if (rg == NULL)
+		return (NULL);
+	rg->connrg_members = kmem_zalloc(CONN_RG_SIZE_INIT * sizeof (conn_t *),
+	    KM_NOSLEEP|KM_NORMALPRI);
+	if (rg->connrg_members == NULL) {
+		kmem_free(rg, sizeof (conn_rg_t));
+		return (NULL);
+	}
+
+	mutex_init(&rg->connrg_lock, NULL, MUTEX_DEFAULT, NULL);
+	rg->connrg_size = CONN_RG_SIZE_INIT;
+	/* insert connp as the first member */
+	rg->connrg_count = 1;
+	rg->connrg_members[0] = connp;
+	return (rg);
+}
+
+/*
+ * Destroy a conn_rg_t structure
+ * All conn_t in the group must be removed beforehand
+ */
+void
+conn_rg_destroy(conn_rg_t *rg)
+{
+	mutex_enter(&rg->connrg_lock);
+	ASSERT(rg->connrg_count == 0);
+	kmem_free(rg->connrg_members, rg->connrg_size * sizeof (conn_t *));
+	mutex_destroy(&rg->connrg_lock);
+	kmem_free(rg, sizeof (conn_rg_t));
+}
+
+/*
+ * Check if all the connections in rg have the same effective UID.
+ * If true, add connp into the connection group.
+ */
+int
+conn_rg_insert(conn_rg_t *rg, conn_t *connp)
+{
+	mutex_enter(&rg->connrg_lock);
+
+	VERIFY(rg->connrg_size > 0);
+	VERIFY(rg->connrg_count <= rg->connrg_size);
+	if (rg->connrg_count != 0) {
+		cred_t *oldcred = rg->connrg_members[0]->conn_cred;
+		cred_t *newcred = connp->conn_cred;
+
+		if (crgetuid(oldcred) != crgetuid(newcred) ||
+		    crgetzoneid(oldcred) != crgetzoneid(newcred)) {
+			mutex_exit(&rg->connrg_lock);
+			return (EADDRNOTAVAIL);
+		}
+	}
+
+	if (rg->connrg_count == rg->connrg_size) {
+		uint_t oldalloc = rg->connrg_size * sizeof (conn_t *);
+		uint_t newsize = rg->connrg_size + CONN_RG_SIZE_STEP;
+		conn_t **newmembers;
+
+		if (newsize > CONN_RG_SIZE_MAX) {
+			mutex_exit(&rg->connrg_lock);
+			return (EINVAL);
+		}
+
+		/* expand hash table */
+		newmembers = kmem_zalloc(newsize * sizeof (conn_t *),
+		    KM_NOSLEEP|KM_NORMALPRI);
+		if (newmembers == NULL) {
+			mutex_exit(&rg->connrg_lock);
+			return (ENOMEM);
+		}
+		bcopy(rg->connrg_members, newmembers, oldalloc);
+		kmem_free(rg->connrg_members, oldalloc);
+		rg->connrg_members = newmembers;
+		rg->connrg_size = newsize;
+	}
+
+	rg->connrg_members[rg->connrg_count] = connp;
+	rg->connrg_count++;
+
+	mutex_exit(&rg->connrg_lock);
+	return (0);
+}
+
+/*
+ * Remove a connection from the given group
+ * Returns number of connection left in the group
+ */
+uint_t
+conn_rg_remove(conn_rg_t *rg, conn_t *connp)
+{
+	uint_t i;
+	uint_t count_remaining;
+
+	mutex_enter(&rg->connrg_lock);
+	for (i = 0; i < rg->connrg_count; i++) {
+		if (rg->connrg_members[i] == connp)
+			break;
+	}
+	/* The item should be present */
+	ASSERT(i < rg->connrg_count);
+	/* Move the last member into this position */
+	rg->connrg_count--;
+	rg->connrg_members[i] = rg->connrg_members[rg->connrg_count];
+	rg->connrg_members[rg->connrg_count] = NULL;
+	count_remaining = rg->connrg_count;
+	mutex_exit(&rg->connrg_lock);
+	return (count_remaining);
+}
+
+/* Hash one uint32_t into hash value using DJBX33A */
+static uint32_t
+conn_rg_lb_hash_uint32(uint32_t value, uint32_t addr)
+{
+	value = (value << 5) + value + (addr & 0xFF);
+	value = (value << 5) + value + (addr >> 8) & 0xFF;
+	value = (value << 5) + value + (addr >> 16) & 0xFF;
+	value = (value << 5) + value + (addr >> 24);
+	return (value);
+}
+
+/* Hash one in6_addr_t into hash value using DJBX33A */
+static uint32_t
+conn_rg_lb_hash_in6_addr(uint32_t value, const in6_addr_t *addr)
+{
+	value = conn_rg_lb_hash_uint32(value, addr->_S6_un._S6_u32[0]);
+	value = conn_rg_lb_hash_uint32(value, addr->_S6_un._S6_u32[1]);
+	value = conn_rg_lb_hash_uint32(value, addr->_S6_un._S6_u32[2]);
+	value = conn_rg_lb_hash_uint32(value, addr->_S6_un._S6_u32[3]);
+	return (value);
+}
+
+/* Calculate DJBX33A Hash from a IPv4 4-tuple */
+static uint32_t
+conn_rg_lb_hash(ipaddr_t laddr, ipaddr_t faddr, uint32_t ports)
+{
+	uint32_t value = 0;
+	value = conn_rg_lb_hash_uint32(value, laddr);
+	value = conn_rg_lb_hash_uint32(value, faddr);
+	value = conn_rg_lb_hash_uint32(value, ports);
+	return (value);
+}
+
+/* Calculate DJBX33A Hash from a IPv6 4-tuple */
+static uint32_t
+conn_rg_lb_hash6(const in6_addr_t *laddr, const in6_addr_t *faddr,
+    uint32_t ports)
+{
+	uint32_t value = 0;
+	value = conn_rg_lb_hash_in6_addr(value, laddr);
+	value = conn_rg_lb_hash_in6_addr(value, faddr);
+	value = conn_rg_lb_hash_uint32(value, ports);
+	return (value);
+}
+
+/*
+ * Pick a connection from the given group, in a load-balaced way
+ * A DJBX33A Hash based algorithm is used here.
+ * We do not need a fancy hash algorithm here, since this is only
+ * for load-balacing (which is only best effort), and it's not cryptography
+ * related so there is no security concern.
+ */
+conn_t *
+conn_rg_lb_pick(conn_rg_t *rg, ipaddr_t src, ipaddr_t dst, uint32_t ports)
+{
+	uint32_t idx = conn_rg_lb_hash(src, dst, ports);
+
+	mutex_enter(&rg->connrg_lock);
+
+	idx %= rg->connrg_count;
+	conn_t *ret = rg->connrg_members[idx];
+
+	mutex_exit(&rg->connrg_lock);
+	return (ret);
+}
+
+/*
+ * Pick a connection from the given group, in a load-balaced way,
+ * utilizing IPv6 addresses.
+ */
+conn_t *
+conn_rg_lb_pick6(conn_rg_t *rg, const in6_addr_t *src, const in6_addr_t *dst,
+    uint32_t ports)
+{
+	uint32_t idx = conn_rg_lb_hash6(src, dst, ports);
+
+	mutex_enter(&rg->connrg_lock);
+
+	idx %= rg->connrg_count;
+	conn_t *ret = rg->connrg_members[idx];
+
+	mutex_exit(&rg->connrg_lock);
+	return (ret);
 }

@@ -120,3 +120,14 @@ post = ksensor_fini
 
 [/opt/os-tests/tests/stackalign]
 tests = ['stackalign.32', 'stackalign.64']
+
+[/opt/os-tests/tests/reuseport]
+user = root
+tests = ['rp_test_tcp',
+	 'rp_test_tcp_noopt',
+	 'rp_test_tcp_seteuid',
+	 'rp_test_tcp_toggle',
+	 'rp_test_udp',
+	 'rp_test_udp_noopt',
+	 'rp_test_udp_seteuid',
+	 'rp_test_udp_toggle']
