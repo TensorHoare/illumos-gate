@@ -236,7 +236,6 @@ typedef struct conn_rg_s {
 	uint_t		connrg_size;
 	uint_t		connrg_count;
 	uint_t		connrg_active;
-	uint64_t	connrg_lb_state;
 	struct conn_s	**connrg_members;
 } conn_rg_t;
 
@@ -766,7 +765,7 @@ void	conn_rg_destroy(conn_rg_t *rg);
 int	conn_rg_insert(conn_rg_t *rg, conn_t *connp);
 boolean_t	conn_rg_remove(conn_rg_t *rg, conn_t *connp);
 void	conn_rg_setactive(conn_rg_t *rg, boolean_t is_acitve);
-conn_t	*conn_rg_lb_pick(conn_rg_t *rg);
+conn_t	*conn_rg_lb_pick(conn_rg_t *rg, ipaddr_t src, ipaddr_t dst, uint32_t ports);
 
 #ifdef	__cplusplus
 }

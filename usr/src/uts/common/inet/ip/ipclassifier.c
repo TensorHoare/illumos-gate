@@ -1642,7 +1642,11 @@ ipcl_classify_v4(mblk_t *mp, uint8_t protocol, uint_t hdr_len,
 				 * Have multiple bindings by SO_REUSEPORT,
 				 * do load balancing
 				 */
-				connp = conn_rg_lb_pick(connp->conn_rg_bind);
+				connp = conn_rg_lb_pick(
+					    connp->conn_rg_bind,
+					    ipha->ipha_src,
+					    ipha->ipha_dst,
+					    ports);
 			}
 			CONN_INC_REF(connp);
 			mutex_exit(&bind_connfp->connf_lock);
@@ -1683,7 +1687,11 @@ ipcl_classify_v4(mblk_t *mp, uint8_t protocol, uint_t hdr_len,
 				 * Have multiple bindings by SO_REUSEPORT,
 				 * do load balancing
 				 */
-				connp = conn_rg_lb_pick(connp->conn_rg_bind);
+				connp = conn_rg_lb_pick(
+					    connp->conn_rg_bind, 
+					    ipha->ipha_src, 
+					    ipha->ipha_dst,
+					    ports);
 			}
 			CONN_INC_REF(connp);
 			mutex_exit(&connfp->connf_lock);
@@ -1791,7 +1799,11 @@ ipcl_classify_v6(mblk_t *mp, uint8_t protocol, uint_t hdr_len,
 				 * Have multiple SO_REUSEPORT bind,
 				 * do load balancing
 				 */
-				connp = conn_rg_lb_pick(connp->conn_rg_bind);
+				connp = conn_rg_lb_pick(
+					    connp->conn_rg_bind, 
+					    V4_PART_OF_V6(ip6h->ip6_src),
+					    V4_PART_OF_V6(ip6h->ip6_dst),
+					    ports);
 			}
 			CONN_INC_REF(connp);
 			mutex_exit(&bind_connfp->connf_lock);
@@ -1834,7 +1846,11 @@ ipcl_classify_v6(mblk_t *mp, uint8_t protocol, uint_t hdr_len,
 				 * Have multiple SO_REUSEPORT bind,
 				 * do load balancing
 				 */
-				connp = conn_rg_lb_pick(connp->conn_rg_bind);
+				connp = conn_rg_lb_pick(
+					    connp->conn_rg_bind, 
+					    V4_PART_OF_V6(ip6h->ip6_src),
+					    V4_PART_OF_V6(ip6h->ip6_dst),
+					    ports);
 			}
 			CONN_INC_REF(connp);
 			mutex_exit(&connfp->connf_lock);
@@ -2861,13 +2877,6 @@ conn_rg_init(conn_t *connp)
 	rg->connrg_size = CONN_RG_SIZE_INIT;
 	rg->connrg_count = 1;
 	rg->connrg_active = 1;
-	/*
-	 * The initial state of RNG is a fixed number,
-	 * which means its predictable. This shouldn't
-	 * be a security hole since this RNG is only
-	 * used by load balancer to pick connection
-	 */
-	rg->connrg_lb_state = 0xDEADBEEFDEADBEEF;
 	rg->connrg_members[0] = connp;
 	return (rg);
 }
@@ -2978,22 +2987,38 @@ conn_rg_setactive(conn_rg_t *rg, boolean_t is_active)
 	}
 }
 
+/* DJBX33A hash one uint32_t into hash value */
+static uint32_t
+conn_rg_lb_hash_uint32(uint32_t value, uint32_t addr)
+{
+	value = (value << 5) + value + (addr & 0xFF);
+	value = (value << 5) + value + (addr >> 8) & 0xFF;
+	value = (value << 5) + value + (addr >> 16) & 0xFF;
+	value = (value << 5) + value + (addr >> 24);
+	return (value);
+}
+
+/* DJBX33A Hash from ip 4-tuple */
+static uint32_t
+conn_rg_lb_hash(ipaddr_t laddr, ipaddr_t faddr, uint32_t ports)
+{
+	uint32_t value = 0;
+	value = conn_rg_lb_hash_uint32(value, laddr);
+	value = conn_rg_lb_hash_uint32(value, faddr);
+	value = conn_rg_lb_hash_uint32(value, ports);
+	return (value);
+}
+
 /*
  * Pick a connection from the given group, in a load-balaced way
  * Currently we use a random load balancer based on Xorshift64
  */
 conn_t *
-conn_rg_lb_pick(conn_rg_t *rg)
+conn_rg_lb_pick(conn_rg_t *rg, ipaddr_t src, ipaddr_t dst, uint32_t ports)
 {
-	/* quick implementation */
-	mutex_enter(&rg->connrg_lock);
+	uint32_t idx = conn_rg_lb_hash(src, dst, ports);
 
-	/* Random load balancing with Xorshift64 */
-	uint64_t idx = rg->connrg_lb_state;
-	idx ^= idx << 13;
-	idx ^= idx >> 7;
-	idx ^= idx << 17;
-	rg->connrg_lb_state = idx;
+	mutex_enter(&rg->connrg_lock);
 
 	idx = idx % rg->connrg_count;
 	conn_t *ret = rg->connrg_members[idx];
