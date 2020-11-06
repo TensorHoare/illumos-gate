@@ -1643,10 +1643,10 @@ ipcl_classify_v4(mblk_t *mp, uint8_t protocol, uint_t hdr_len,
 				 * do load balancing
 				 */
 				connp = conn_rg_lb_pick(
-					    connp->conn_rg_bind,
-					    ipha->ipha_src,
-					    ipha->ipha_dst,
-					    ports);
+				    connp->conn_rg_bind,
+				    ipha->ipha_src,
+				    ipha->ipha_dst,
+				    ports);
 			}
 			CONN_INC_REF(connp);
 			mutex_exit(&bind_connfp->connf_lock);
@@ -1688,10 +1688,10 @@ ipcl_classify_v4(mblk_t *mp, uint8_t protocol, uint_t hdr_len,
 				 * do load balancing
 				 */
 				connp = conn_rg_lb_pick(
-					    connp->conn_rg_bind, 
-					    ipha->ipha_src, 
-					    ipha->ipha_dst,
-					    ports);
+				    connp->conn_rg_bind,
+				    ipha->ipha_src,
+				    ipha->ipha_dst,
+				    ports);
 			}
 			CONN_INC_REF(connp);
 			mutex_exit(&connfp->connf_lock);
@@ -1800,10 +1800,10 @@ ipcl_classify_v6(mblk_t *mp, uint8_t protocol, uint_t hdr_len,
 				 * do load balancing
 				 */
 				connp = conn_rg_lb_pick(
-					    connp->conn_rg_bind, 
-					    V4_PART_OF_V6(ip6h->ip6_src),
-					    V4_PART_OF_V6(ip6h->ip6_dst),
-					    ports);
+				    connp->conn_rg_bind,
+				    V4_PART_OF_V6(ip6h->ip6_src),
+				    V4_PART_OF_V6(ip6h->ip6_dst),
+				    ports);
 			}
 			CONN_INC_REF(connp);
 			mutex_exit(&bind_connfp->connf_lock);
@@ -1847,10 +1847,10 @@ ipcl_classify_v6(mblk_t *mp, uint8_t protocol, uint_t hdr_len,
 				 * do load balancing
 				 */
 				connp = conn_rg_lb_pick(
-					    connp->conn_rg_bind, 
-					    V4_PART_OF_V6(ip6h->ip6_src),
-					    V4_PART_OF_V6(ip6h->ip6_dst),
-					    ports);
+				    connp->conn_rg_bind,
+				    V4_PART_OF_V6(ip6h->ip6_src),
+				    V4_PART_OF_V6(ip6h->ip6_dst),
+				    ports);
 			}
 			CONN_INC_REF(connp);
 			mutex_exit(&connfp->connf_lock);

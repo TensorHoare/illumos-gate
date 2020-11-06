@@ -1034,7 +1034,7 @@ tcp_fallback(sock_lower_handle_t proto_handle, queue_t *q,
 	if (connp->conn_rg_bind != NULL) {
 		freeb(stropt_mp);
 		freeb(ordrel_mp);
-		squeue_synch_exit(connp);
+		squeue_synch_exit(connp, SQ_NODRAIN);
 		return (EINVAL);
 	}
 

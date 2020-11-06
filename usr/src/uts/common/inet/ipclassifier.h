@@ -765,7 +765,8 @@ void	conn_rg_destroy(conn_rg_t *rg);
 int	conn_rg_insert(conn_rg_t *rg, conn_t *connp);
 boolean_t	conn_rg_remove(conn_rg_t *rg, conn_t *connp);
 void	conn_rg_setactive(conn_rg_t *rg, boolean_t is_acitve);
-conn_t	*conn_rg_lb_pick(conn_rg_t *rg, ipaddr_t src, ipaddr_t dst, uint32_t ports);
+conn_t	*conn_rg_lb_pick(conn_rg_t *rg, ipaddr_t src, ipaddr_t dst,
+    uint32_t ports);
 
 #ifdef	__cplusplus
 }
