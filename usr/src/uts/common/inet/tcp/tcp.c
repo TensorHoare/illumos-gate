@@ -1434,7 +1434,7 @@ tcp_free(tcp_t *tcp)
 		/*
 		 * This is only necessary for connections which enabled
 		 * SO_REUSEPORT but were never bound.  Such connections should
-		 * be the one and only member of the tcp_rg_tp to which they
+		 * be the one and only member of the conn_rg_t to which they
 		 * have been associated.
 		 */
 		VERIFY(conn_rg_remove(connp->conn_rg_bind, connp) == 0);

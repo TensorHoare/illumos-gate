@@ -2980,14 +2980,16 @@ conn_rg_remove(conn_rg_t *rg, conn_t *connp)
 void
 conn_rg_setactive(conn_rg_t *rg, boolean_t is_active)
 {
+	mutex_enter(&rg->connrg_lock);
 	if (is_active) {
-		atomic_inc_uint(&rg->connrg_active);
+		++rg->connrg_active;
 	} else {
-		atomic_dec_uint(&rg->connrg_active);
+		--rg->connrg_active;
 	}
+	mutex_exit(&rg->connrg_lock);
 }
 
-/* DJBX33A hash one uint32_t into hash value */
+/* Hash one uint32_t into hash value using DJBX33A */
 static uint32_t
 conn_rg_lb_hash_uint32(uint32_t value, uint32_t addr)
 {
@@ -2998,7 +3000,7 @@ conn_rg_lb_hash_uint32(uint32_t value, uint32_t addr)
 	return (value);
 }
 
-/* DJBX33A Hash from ip 4-tuple */
+/* Calulate DJBX33A Hash from ip 4-tuple */
 static uint32_t
 conn_rg_lb_hash(ipaddr_t laddr, ipaddr_t faddr, uint32_t ports)
 {
@@ -3011,7 +3013,7 @@ conn_rg_lb_hash(ipaddr_t laddr, ipaddr_t faddr, uint32_t ports)
 
 /*
  * Pick a connection from the given group, in a load-balaced way
- * Currently we use a random load balancer based on Xorshift64
+ * Currently we use a DJBX33A Hash based algorithm
  */
 conn_t *
 conn_rg_lb_pick(conn_rg_t *rg, ipaddr_t src, ipaddr_t dst, uint32_t ports)
