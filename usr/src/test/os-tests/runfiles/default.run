@@ -116,3 +116,9 @@ pre = ksensor_init
 tests = [ 'ksensor_basic.32','ksensor_basic.64', 'ksensor_err.32',
     'ksensor_err.64' ]
 post = ksensor_fini
+
+[/opt/os-tests/tests/reuseport]
+user = root
+tests = ['rp_test_noopt',
+       	 'rp_test_tcp',
+      	 'rp_test_udp']

@@ -42,3 +42,10 @@ tests = [
       'ip_fwd_020'
       ]
 user = root
+
+[/opt/net-tests/tests/reuseport]
+tests = [
+      'rp_test_noopt',
+      'rp_test_tcp',
+      'rp_test_udp'
+]

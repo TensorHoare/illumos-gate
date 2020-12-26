@@ -280,7 +280,7 @@ sockets to be bound to an identical address simutaneously. This option can be
 enabled on both TCP and UDP sockets. Incoming connections (on TCP) or packets
 (on UDP) will be distributed among sockets bound to the specific address. Enabling
 this option on each socket (including the first socket) prior to calling bind(3SOCKET)
-is required for this options to take effect. To prevent port hijacking, all of  the
+is required for this options to take effect. To prevent port hijacking, all of the
 processes binding to the same address must have the same effective UID.
 .sp
 .LP

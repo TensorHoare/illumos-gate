@@ -34,6 +34,7 @@ $(i386_ONLY)dir path=opt/os-tests/tests/i386
 dir path=opt/os-tests/tests/ksensor
 dir path=opt/os-tests/tests/libtopo
 dir path=opt/os-tests/tests/pf_key
+dir path=opt/os-tests/tests/reuseport
 dir path=opt/os-tests/tests/sdevfs
 dir path=opt/os-tests/tests/secflags
 dir path=opt/os-tests/tests/sigqueue
@@ -83,6 +84,9 @@ file path=opt/os-tests/tests/pf_key/eacq-enabler mode=0555
 file path=opt/os-tests/tests/pf_key/kmc-update mode=0555
 file path=opt/os-tests/tests/pf_key/kmc-updater mode=0555
 file path=opt/os-tests/tests/poll_test mode=0555
+file path=opt/os-tests/tests/reuseport/rp_test_noopt mode=0555
+file path=opt/os-tests/tests/reuseport/rp_test_tcp mode=0555
+file path=opt/os-tests/tests/reuseport/rp_test_udp mode=0555
 file path=opt/os-tests/tests/sdevfs/sdevfs_eisdir mode=0555
 file path=opt/os-tests/tests/secflags/addrs-32 mode=0555
 file path=opt/os-tests/tests/secflags/addrs-64 mode=0555
