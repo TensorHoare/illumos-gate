@@ -9,6 +9,8 @@
  * http://www.illumos.org/license/CDDL.
  */
 
+/* Copyright 2020 Araragi Hokuto */
+
 /* rp_test_tcp.c -- test SO_REUSEPORT on TCP */
 
 /*
@@ -43,19 +45,19 @@ bind_socket(const struct sockaddr_in *addr)
 	int	optval;
 	optval	= 1;
 	if (setsockopt(fd, SOL_SOCKET, SO_REUSEPORT,
-		&optval, sizeof(optval)) < 0) {
+	    &optval, sizeof (optval)) < 0) {
 		perror("setsockopt");
 		DONTCARE(close(fd));
 		return (-1);
 	}
 
-	if (bind(fd, (const void *)addr, sizeof(struct sockaddr_in)) < 0) {
+	if (bind(fd, (const void *)addr, sizeof (struct sockaddr_in)) < 0) {
 		perror("bind");
 		DONTCARE(close(fd));
 		return (-1);
 	}
 
-	return fd;
+	return (fd);
 }
 
 int
@@ -78,7 +80,7 @@ int
 main(void)
 {
 	struct sockaddr_in	addr;
-	memset(&addr, 0, sizeof(addr));
+	memset(&addr, 0, sizeof (addr));
 
 	addr.sin_family	= AF_INET;
 	addr.sin_port	= htons(22331);

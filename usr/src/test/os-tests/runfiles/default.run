@@ -120,5 +120,5 @@ post = ksensor_fini
 [/opt/os-tests/tests/reuseport]
 user = root
 tests = ['rp_test_noopt',
-       	 'rp_test_tcp',
-      	 'rp_test_udp']
+	 'rp_test_tcp',
+	 'rp_test_udp']

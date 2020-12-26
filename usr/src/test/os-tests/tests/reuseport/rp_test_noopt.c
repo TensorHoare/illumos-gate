@@ -9,6 +9,8 @@
  * http://www.illumos.org/license/CDDL.
  */
 
+/* Copyright 2020 Araragi Hokuto */
+
 /* rp_test_noopt.c -- test bind(3SOCKET) without SO_REUSEPORT */
 
 /*
@@ -31,12 +33,12 @@
 
 /* create and bind a socket to the given address */
 int
-bind_socket(int *fd, const struct sockaddr_in *addr) 
+bind_socket(int *fd, const struct sockaddr_in *addr)
 {
 	*fd = socket(AF_INET, SOCK_STREAM, 0);
 	if (*fd < 0) {
-		/* 
-		 * Failed to create socket. 
+		/*
+		 * Failed to create socket.
 		 * This is neither PASS or FAIL -- It's an exception.
 		 * return 1 to indicate this scene.
 		 */
@@ -44,14 +46,14 @@ bind_socket(int *fd, const struct sockaddr_in *addr)
 		return (1);
 	}
 
-	return (bind(*fd, (const void *)addr, sizeof(struct sockaddr_in)));
+	return (bind(*fd, (const void *)addr, sizeof (struct sockaddr_in)));
 }
 
 int
 main(void)
 {
 	struct sockaddr_in	addr;
-	memset(&addr, 0, sizeof(addr));
+	memset(&addr, 0, sizeof (addr));
 
 	addr.sin_family	= AF_INET;
 	addr.sin_port	= htons(22334);
@@ -65,13 +67,13 @@ main(void)
 	int	bind_ret;
 
 	bind_ret	= bind_socket(&fda, &addr);
-        if (bind_ret == 1) {
+	if (bind_ret == 1) {
 		/* socket(3SOCKET) failure is an exception */
 		return (-1);
-        }
+	}
 
 	if (bind_ret) {
-                /* failed to bind first socket is an exception */
+		/* failed to bind first socket is an exception */
 		perror("bind");
 		return (-1);
 	}
