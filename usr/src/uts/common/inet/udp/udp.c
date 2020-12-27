@@ -5176,8 +5176,9 @@ udp_do_bind(conn_t *connp, struct sockaddr *sa, socklen_t len, cred_t *cr,
 			}
 
 			/* Attemp to join the group */
+			conn_rg_t *rg = connp1->conn_rg_bind;
 			int insert_ret;
-			insert_ret = conn_rg_insert(connp1->rg, connp);
+			insert_ret = conn_rg_insert(rg, connp);
 			switch (insert_ret) {
 			case EPERM:
 				err = -TACCES;
