@@ -933,9 +933,6 @@ tcp_bindi(tcp_t *tcp, in_port_t port, const in6_addr_t *laddr,
 					case EPERM:
 						*errcode = -TACCES;
 						break;
-					case EADDRINUSE:
-						*errcode = -TNOADDR;
-						break;
 					case EINVAL:
 						*errcode = -TSYSERR;
 						break;

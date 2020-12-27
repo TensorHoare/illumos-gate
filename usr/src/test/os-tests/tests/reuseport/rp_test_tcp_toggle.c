@@ -11,12 +11,13 @@
 
 /* Copyright 2020 Araragi Hokuto */
 
-/* rp_test_tcp.c -- test SO_REUSEPORT on TCP */
+/* rp_test_tcp_toggle.c -- test SO_REUSEPORT toggle behaviour on TCP */
 
 /*
- * This test creates 4 listening socket, and bind
- * them to the same address. None of those bind()
- * calls is supposed to fail.
+ * This test create and bind a TCP socket, with
+ * SO_REUSEPORT enabled; then it disables the option,
+ * and try to bind another socket. Both bind() call
+ * should success.
  */
 
 #include <unistd.h>
@@ -60,18 +61,14 @@ bind_socket(const struct sockaddr_in *addr)
 }
 
 int fda = 0,
-    fdb = 0,
-    fdc = 0,
-    fdd = 0;
+    fdb = 0;
 
 /* close fds before exiting test */
 void
 close_fds(void)
 {
-	if (fda) DONTCARE(close(fda));
-	if (fdb) DONTCARE(close(fdb));
-	if (fdc) DONTCARE(close(fdc));
-	if (fdd) DONTCARE(close(fdd));
+	DONTCARE(close(fda));
+	DONTCARE(close(fdb));
 }
 
 int
@@ -90,15 +87,19 @@ main(void)
 	}
 
 	fda = bind_socket(&addr);
+
+	int optval = 0;
+	if (setsockopt(fda, SOL_SOCKET, SO_REUSEPORT,
+	    &optval, sizeof(optval)) < 0) {
+		perror("setsockopt");
+		return (-1);
+	}
+
 	fdb = bind_socket(&addr);
-	fdc = bind_socket(&addr);
-	fdd = bind_socket(&addr);
 
 	int pass;
 	pass = fda > 0;
 	pass = pass && (fdb > 0);
-	pass = pass && (fdc > 0);
-	pass = pass && (fdd > 0);
 
 	close_fds();
 	return (pass ? 0 : 1);

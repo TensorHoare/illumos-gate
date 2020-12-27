@@ -2922,12 +2922,6 @@ conn_rg_insert(conn_rg_t *rg, conn_t *connp)
 		}
 	}
 
-	if (rg->connrg_active != rg->connrg_count) {
-		/* not all connections are active; reject insert */
-		mutex_exit(&rg->connrg_lock);
-		return (EADDRINUSE);
-	}
-
 	if (rg->connrg_count == rg->connrg_size) {
 		uint_t oldalloc = rg->connrg_size * sizeof (conn_t *);
 		uint_t newsize = rg->connrg_size + CONN_RG_SIZE_STEP;

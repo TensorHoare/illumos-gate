@@ -52,21 +52,21 @@ bind_socket(int *fd, const struct sockaddr_in *addr)
 int
 main(void)
 {
-	struct sockaddr_in	addr;
+	struct sockaddr_in addr;
 	memset(&addr, 0, sizeof (addr));
 
-	addr.sin_family	= AF_INET;
-	addr.sin_port	= htons(22334);
+	addr.sin_family = AF_INET;
+	addr.sin_port = htons(22334);
 	if (inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr) != 1) {
 		/* inet_pton failure is an exception */
 		perror("inet_pton");
 		return (-1);
 	}
 
-	int	fda, fdb;
-	int	bind_ret;
+	int fda, fdb;
+	int bind_ret;
 
-	bind_ret	= bind_socket(&fda, &addr);
+	bind_ret = bind_socket(&fda, &addr);
 	if (bind_ret == 1) {
 		/* socket(3SOCKET) failure is an exception */
 		return (-1);
@@ -78,14 +78,14 @@ main(void)
 		return (-1);
 	}
 
-	bind_ret	= bind_socket(&fdb, &addr);
+	bind_ret = bind_socket(&fdb, &addr);
 	if (bind_ret == 1) {
 		DONTCARE(close(fda));
 		return (-1);
 	}
 
-	int	pass;
-	pass	= (bind_ret < 0) && (errno == EADDRINUSE);
+	int pass;
+	pass = (bind_ret < 0) && (errno == EADDRINUSE);
 
 	DONTCARE(close(fda));
 	DONTCARE(close(fdb));

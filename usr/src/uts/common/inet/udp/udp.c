@@ -5183,9 +5183,6 @@ udp_do_bind(conn_t *connp, struct sockaddr *sa, socklen_t len, cred_t *cr,
 			case EPERM:
 				err = -TACCES;
 				goto errout;
-			case EADDRINUSE:
-				err = -TADDRBUSY;
-				goto errout;
 			case EINVAL:
 				err = -TSYSERR;
 				goto errout;

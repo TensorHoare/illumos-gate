@@ -35,15 +35,14 @@
 int
 bind_socket(const struct sockaddr_in *addr)
 {
-	int	fd;
-	fd	= socket(AF_INET, SOCK_DGRAM, 0);
+	int fd;
+	fd = socket(AF_INET, SOCK_DGRAM, 0);
 	if (fd < 0) {
 		perror("socket");
 		return (-1);
 	}
 
-	int	optval;
-	optval	= 1;
+	int optval = 1;
 	if (setsockopt(fd, SOL_SOCKET, SO_REUSEPORT,
 	    &optval, sizeof (optval)) < 0) {
 		perror("setsockopt");
@@ -60,8 +59,7 @@ bind_socket(const struct sockaddr_in *addr)
 	return (fd);
 }
 
-int
-    fda = 0,
+int fda = 0,
     fdb = 0,
     fdc = 0,
     fdd = 0;
@@ -83,7 +81,7 @@ main(void)
 	memset(&addr, 0, sizeof (addr));
 
 	addr.sin_family	= AF_INET;
-	addr.sin_port	= htons(22331);
+	addr.sin_port = htons(22331);
 
 	if (inet_pton(AF_INET, "127.0.0.1", &addr) < 0) {
 		/* inet_pton failure is an exception */
@@ -91,16 +89,16 @@ main(void)
 		return (-1);
 	}
 
-	fda	= bind_socket(&addr);
-	fdb	= bind_socket(&addr);
-	fdc	= bind_socket(&addr);
-	fdd	= bind_socket(&addr);
+	fda = bind_socket(&addr);
+	fdb = bind_socket(&addr);
+	fdc = bind_socket(&addr);
+	fdd = bind_socket(&addr);
 
-	int	pass;
-	pass	= fda > 0;
-	pass	= pass && (fdb > 0);
-	pass	= pass && (fdc > 0);
-	pass	= pass && (fdd > 0);
+	int pass;
+	pass = fda > 0;
+	pass = pass && (fdb > 0);
+	pass = pass && (fdc > 0);
+	pass = pass && (fdd > 0);
 
 	close_fds();
 	return (pass ? 0 : 1);
