@@ -121,4 +121,6 @@ post = ksensor_fini
 user = root
 tests = ['rp_test_noopt',
 	 'rp_test_tcp',
-	 'rp_test_udp']
+	 'rp_test_tcp_toggle',
+	 'rp_test_udp',
+	 'rp_test_udp_toggle']
