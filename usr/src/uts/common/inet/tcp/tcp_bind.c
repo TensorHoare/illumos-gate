@@ -511,8 +511,8 @@ tcp_bind_select_lport(tcp_t *tcp, in_port_t *requested_port_ptr,
 				    "tcp_bind: requested addr busy");
 			}
 
-			if (errcode == (-TNOADDR)) {
-				errcode = (-TADDRBUSY);
+			if (errcode == -TNOADDR) {
+				errcode = -TADDRBUSY;
 			}
 
 			return (errcode);
