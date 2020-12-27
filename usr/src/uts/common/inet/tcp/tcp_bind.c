@@ -683,7 +683,7 @@ tcp_bindi(tcp_t *tcp, in_port_t port, const in6_addr_t *laddr,
 	conn_t *connp = tcp->tcp_connp;
 	tcp_stack_t	*tcps = tcp->tcp_tcps;
 	boolean_t reuseport = connp->conn_reuseport;
-	*errcode = (-TNOADDR);
+	*errcode = -TNOADDR;
 
 	/*
 	 * Lookup for free addresses is done in a loop and "loopmax"
@@ -915,6 +915,7 @@ tcp_bindi(tcp_t *tcp, in_port_t port, const in6_addr_t *laddr,
 			mutex_exit(&tbf->tf_lock);
 		} else {
 			if (attempt_reuse) {
+				/* Attempt to join the existing group */
 				int err;
 				conn_rg_t *rg;
 
@@ -928,7 +929,20 @@ tcp_bindi(tcp_t *tcp, in_port_t port, const in6_addr_t *laddr,
 				    lconnp->conn_rg_bind, connp);
 				if (err != 0) {
 					mutex_exit(&tbf->tf_lock);
-					*errcode = err;
+					switch (err) {
+					case EPERM:
+						*errcode = -TACCES;
+						break;
+					case EADDRINUSE:
+						*errcode = -TNOADDR;
+						break;
+					case EINVAL:
+						*errcode = -TSYSERR;
+						break;
+					case ENOMEM:
+						*errcode = -TSYSERR;
+						break;
+					}
 					return (0);
 				}
 				connp->conn_rg_bind = lconnp->conn_rg_bind;
@@ -953,7 +967,8 @@ tcp_bindi(tcp_t *tcp, in_port_t port, const in6_addr_t *laddr,
 			    (connp->conn_rg_bind == NULL)) {
 				conn_rg_t *rg = conn_rg_init(connp);
 				if (rg == NULL) {
-					*errcode = ENOMEM;
+					mutex_exit(&tbf->tf_lock);
+					*errcode = -TSYSERR;
 					return (0);
 				}
 				connp->conn_rg_bind = rg;

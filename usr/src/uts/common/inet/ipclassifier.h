@@ -760,13 +760,15 @@ extern int	ip_helper_stream_setup(queue_t *, dev_t *, int, int,
 extern mib2_socketInfoEntry_t *conn_get_socket_info(conn_t *,
     mib2_socketInfoEntry_t *);
 
-conn_rg_t	*conn_rg_init(conn_t *connp);
-void	conn_rg_destroy(conn_rg_t *rg);
-int	conn_rg_insert(conn_rg_t *rg, conn_t *connp);
-boolean_t	conn_rg_remove(conn_rg_t *rg, conn_t *connp);
-void	conn_rg_setactive(conn_rg_t *rg, boolean_t is_acitve);
-conn_t	*conn_rg_lb_pick(conn_rg_t *rg, ipaddr_t src, ipaddr_t dst,
-    uint32_t ports);
+/* connection group manipulation */
+conn_rg_t	*conn_rg_init(conn_t *);
+void	conn_rg_destroy(conn_rg_t *);
+int	conn_rg_insert(conn_rg_t *, conn_t *);
+uint_t	conn_rg_remove(conn_rg_t *, conn_t *);
+void	conn_rg_setactive(conn_rg_t *, boolean_t);
+conn_t	*conn_rg_lb_pick(conn_rg_t *, ipaddr_t, ipaddr_t, uint32_t);
+conn_t	*conn_rg_lb_pick6(conn_rg_t *, const in6_addr_t *, const in6_addr_t *,
+    uint32_t)
 
 #ifdef	__cplusplus
 }

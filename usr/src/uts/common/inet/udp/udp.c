@@ -4991,25 +4991,28 @@ udp_do_bind(conn_t *connp, struct sockaddr *sa, socklen_t len, cred_t *cr,
 	}
 
 	/*
-	 * If conn_reuseaddr is not set, then we have to make sure that
-	 * the IP address and port number the application requested
-	 * (or we selected for the application) is not being used by
-	 * another stream.  If another stream is already using the
-	 * requested IP address and port, the behavior depends on
-	 * "bind_to_req_port_only". If set the bind fails; otherwise we
-	 * search for any unused port to bind to the stream.
+	 * If neither conn_reuseaddr nor conn_reuseport is set,
+	 * then we have to make sure that the IP address and port number
+	 * the application requested (or we selected for the application)
+	 * is not being used by another stream. If another stream is
+	 * already using the requested IP address and port, the behavior
+	 * depends on "bind_to_req_port_only". If set the bind fails;
+	 * otherwise we search for any unused port to bind to the stream.
 	 *
 	 * As per the BSD semantics, as modified by the Deering multicast
 	 * changes, if conn_reuseaddr is set, then we allow multiple binds
 	 * to the same port independent of the local IP address.
+	 *
+	 * As per the Linux sematics, if conn_reuseport is set, then we
+	 * allow multiple duplicate binds to the same address.
 	 *
 	 * This is slightly different than in SunOS 4.X which did not
 	 * support IP multicast. Note that the change implemented by the
 	 * Deering multicast code effects all binds - not only binding
 	 * to IP multicast addresses.
 	 *
-	 * Note that when binding to port zero we ignore SO_REUSEADDR in
-	 * order to guarantee a unique port.
+	 * Note that when binding to port zero we ignore SO_REUSEADDR
+	 * or SO_REUSEPORT in order to guarantee a unique port.
 	 */
 
 	count = 0;
@@ -5148,7 +5151,7 @@ udp_do_bind(conn_t *connp, struct sockaddr *sa, socklen_t len, cred_t *cr,
 				if (rg == NULL) {
 					mutex_exit(&udpf->uf_lock);
 					mutex_exit(&connp->conn_lock);
-					return (ENOMEM);
+					return (-TSYSERR);
 				}
 				connp->conn_rg_bind = rg;
 			}
@@ -5164,30 +5167,33 @@ udp_do_bind(conn_t *connp, struct sockaddr *sa, socklen_t len, cred_t *cr,
 			ASSERT(udp1 != NULL);
 			ASSERT(connp1 != NULL);
 
-			boolean_t allow_reuse = B_TRUE;
-
 			int err = 0;
 
 			/* Reject reuse if not set on the first */
 			if (connp1->conn_rg_bind == NULL) {
-				err = (-TADDRBUSY);
+				err = -TADDRBUSY;
 				goto errout;
 			}
 
-			/*
-			 * Reject reuse if not set on
-			 * all sockets in the group
-			 */
-			conn_rg_t *rg = connp1->conn_rg_bind;
-			if (rg->connrg_active != rg->connrg_count) {
-				err = (-TADDRBUSY);
+			/* Attemp to join the group */
+			int insert_ret;
+			insert_ret = conn_rg_insert(rg, connp);
+			switch (insert_ret) {
+			case EPERM:
+				err = -TACCES;
 				goto errout;
-			}
-
-			/* Join the group */
-			err = conn_rg_insert(rg, connp);
-			if (err != 0) {
+			case EADDRINUSE:
+				err = -TADDRBUSY;
 				goto errout;
+			case EINVAL:
+				err = -TSYSERR;
+				goto errout;
+			case ENOMEM:
+				err = -TSYSERR;
+				goto errout;
+			default:
+				ASSERT(insert_ret == 0);
+				break;
 			}
 			connp->conn_rg_bind = rg;
 			break;
@@ -6224,6 +6230,13 @@ udp_fallback(sock_lower_handle_t proto_handle, queue_t *q,
 	udp = connp->conn_udp;
 
 	stropt_mp = allocb_wait(sizeof (*stropt), BPRI_HI, STR_NOSIG, NULL);
+
+	/*
+	 * Do not allow fallback on connections making use of SO_REUSEPORT.
+	 */
+	if (connp->conn_rg_bind != NULl || connp->conn_reuseport) {
+		return (ENXIO);
+	}
 
 	/*
 	 * setup the fallback stream that was allocated

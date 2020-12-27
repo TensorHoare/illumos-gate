@@ -5289,7 +5289,7 @@ ip_fanout_udp_multi_v4(mblk_t *mp, ipha_t *ipha, uint16_t lport, uint16_t fport,
 	/*
 	 * If SO_REUSEADDR or SO_REUSEPORT has been set on the
 	 * first we send the packet to all clients that have
-	 * join the group and match the port.
+	 * joined the group and match the port.
 	 */
 	while (connp != NULL) {
 		if ((IPCL_UDP_MATCH(connp, lport, laddr, fport, faddr)) &&
@@ -5418,7 +5418,7 @@ notfound:
 	/*
 	 * If SO_REUSEADDR or SO_REUSEPORT has been set on the
 	 * first we send the packet to all clients that have
-	 * join the group and match the port.
+	 * joined the group and match the port.
 	 */
 	if (connp->conn_reuseaddr || connp->conn_reuseport) {
 		conn_t		*first_connp = connp;
