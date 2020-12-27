@@ -5177,7 +5177,7 @@ udp_do_bind(conn_t *connp, struct sockaddr *sa, socklen_t len, cred_t *cr,
 
 			/* Attemp to join the group */
 			int insert_ret;
-			insert_ret = conn_rg_insert(rg, connp);
+			insert_ret = conn_rg_insert(connp1->rg, connp);
 			switch (insert_ret) {
 			case EPERM:
 				err = -TACCES;
@@ -6234,7 +6234,7 @@ udp_fallback(sock_lower_handle_t proto_handle, queue_t *q,
 	/*
 	 * Do not allow fallback on connections making use of SO_REUSEPORT.
 	 */
-	if (connp->conn_rg_bind != NULl || connp->conn_reuseport) {
+	if (connp->conn_rg_bind != NULL || connp->conn_reuseport) {
 		return (ENXIO);
 	}
 
