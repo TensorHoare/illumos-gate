@@ -3017,7 +3017,7 @@ conn_rg_lb_hash_in6_addr(uint32_t value, const in6_addr_t *addr)
 	value = conn_rg_lb_hash_uint32(value, addr->_S6_un._S6_u32[1]);
 	value = conn_rg_lb_hash_uint32(value, addr->_S6_un._S6_u32[2]);
 	value = conn_rg_lb_hash_uint32(value, addr->_S6_un._S6_u32[3]);
-	return value;
+	return (value);
 }
 
 /* Calculate DJBX33A Hash from a IPv4 4-tuple */
@@ -3040,7 +3040,7 @@ conn_rg_lb_hash6(const in6_addr_t *laddr, const in6_addr_t *faddr,
 	value = conn_rg_lb_hash_in6_addr(value, laddr);
 	value = conn_rg_lb_hash_in6_addr(value, faddr);
 	value = conn_rg_lb_hash_uint32(value, ports);
-	return value;
+	return (value);
 }
 
 /*

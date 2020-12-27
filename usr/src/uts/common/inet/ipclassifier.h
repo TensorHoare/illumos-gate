@@ -236,7 +236,7 @@ typedef struct conn_rg_s {
 	uint_t		connrg_size;
 	uint_t		connrg_count;
 	uint_t		connrg_active;
-	struct conn_s	**connrg_members;
+	conn_t	**connrg_members;
 } conn_rg_t;
 
 /*
