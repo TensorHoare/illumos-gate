@@ -1427,8 +1427,6 @@ tcp_free(tcp_t *tcp)
 	if (tcp->tcp_cc_algo != NULL && tcp->tcp_cc_algo->cb_destroy != NULL)
 		tcp->tcp_cc_algo->cb_destroy(&tcp->tcp_ccv);
 
-	VERIFY(connp->conn_rg_bind == NULL);
-
 	/*
 	 * If this is a non-STREAM socket still holding on to an upper
 	 * handle, release it. As a result of fallback we might also see

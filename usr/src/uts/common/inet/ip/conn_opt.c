@@ -1133,7 +1133,6 @@ conn_opt_set_socket(conn_opt_arg_t *coa, t_scalar_t name, uint_t inlen,
 		connp->conn_reuseaddr = onoff;
 		break;
 	case SO_REUSEPORT:
-		ASSERT(IPCL_IS_NONSTR(connp));
 		if (!IPCL_IS_NONSTR(connp)) {
 			if (onoff) {
 				/*

@@ -42,10 +42,8 @@ bind_socket(const struct sockaddr_in *addr)
 		return (-1);
 	}
 
-	printf("%x\n", SO_REUSEPORT);
-
 	int optval = 1;
-	if (setsockopt(fd, SOL_SOCKET, 0x2004,
+	if (setsockopt(fd, SOL_SOCKET, SO_REUSEPORT,
 	    &optval, sizeof (optval)) < 0) {
 		perror("setsockopt");
 		DONTCARE(close(fd));
