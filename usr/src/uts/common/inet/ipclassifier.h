@@ -227,16 +227,13 @@ typedef struct crb_s {
  * - connrg_lock:	Protects the other fields
  * - connrg_size:	Allocated size (in entries) of connrg_members array
  * - connrg_count:	Count of occupied connrg_members slots
- * - connrg_active:	Count of members which still have SO_REUSEPORT set
- * - connrg_lb_state:	State of load balancer
  * - connrg_members:	Connections associated with address/port group
  */
 typedef struct conn_rg_s {
 	kmutex_t	connrg_lock;
 	uint_t		connrg_size;
 	uint_t		connrg_count;
-	uint_t		connrg_active;
-	conn_t	**connrg_members;
+	conn_t		**connrg_members;
 } conn_rg_t;
 
 /*
@@ -765,7 +762,6 @@ conn_rg_t	*conn_rg_init(conn_t *);
 void	conn_rg_destroy(conn_rg_t *);
 int	conn_rg_insert(conn_rg_t *, conn_t *);
 uint_t	conn_rg_remove(conn_rg_t *, conn_t *);
-void	conn_rg_setactive(conn_rg_t *, boolean_t);
 conn_t	*conn_rg_lb_pick(conn_rg_t *, ipaddr_t, ipaddr_t, uint32_t);
 conn_t	*conn_rg_lb_pick6(conn_rg_t *, const in6_addr_t *, const in6_addr_t *,
     uint32_t);

@@ -1155,9 +1155,6 @@ conn_opt_set_socket(conn_opt_arg_t *coa, t_scalar_t name, uint_t inlen,
 		}
 
 		connp->conn_reuseport = onoff;
-		if (connp->conn_rg_bind != NULL) {
-			conn_rg_setactive(connp->conn_rg_bind, onoff);
-		}
 		break;
 	case SO_DONTROUTE:
 		if (onoff)

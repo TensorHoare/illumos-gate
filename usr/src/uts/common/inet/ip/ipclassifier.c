@@ -2976,19 +2976,6 @@ conn_rg_remove(conn_rg_t *rg, conn_t *connp)
 	return (count_remaining);
 }
 
-/* Toggle active state of SO_REUSEPORT */
-void
-conn_rg_setactive(conn_rg_t *rg, boolean_t is_active)
-{
-	mutex_enter(&rg->connrg_lock);
-	if (is_active) {
-		++rg->connrg_active;
-	} else {
-		--rg->connrg_active;
-	}
-	mutex_exit(&rg->connrg_lock);
-}
-
 /* Hash one uint32_t into hash value using DJBX33A */
 static uint32_t
 conn_rg_lb_hash_uint32(uint32_t value, uint32_t addr)
