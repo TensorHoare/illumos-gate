@@ -2877,7 +2877,6 @@ conn_rg_init(conn_t *connp)
 	rg->connrg_size = CONN_RG_SIZE_INIT;
 	/* insert connp as the first member */
 	rg->connrg_count = 1;
-	rg->connrg_active = 1;
 	rg->connrg_members[0] = connp;
 	return (rg);
 }
@@ -2891,7 +2890,6 @@ conn_rg_destroy(conn_rg_t *rg)
 {
 	mutex_enter(&rg->connrg_lock);
 	ASSERT(rg->connrg_count == 0);
-	ASSERT(rg->connrg_active == 0);
 	kmem_free(rg->connrg_members, rg->connrg_size * sizeof (conn_t *));
 	mutex_destroy(&rg->connrg_lock);
 	kmem_free(rg, sizeof (conn_rg_t));
@@ -2942,7 +2940,6 @@ conn_rg_insert(conn_rg_t *rg, conn_t *connp)
 
 	rg->connrg_members[rg->connrg_count] = connp;
 	rg->connrg_count++;
-	rg->connrg_active++;
 
 	mutex_exit(&rg->connrg_lock);
 	return (0);
@@ -2969,8 +2966,6 @@ conn_rg_remove(conn_rg_t *rg, conn_t *connp)
 	rg->connrg_count--;
 	rg->connrg_members[i] = rg->connrg_members[rg->connrg_count];
 	rg->connrg_members[rg->connrg_count] = NULL;
-	if (connp->conn_reuseport != 0)
-		rg->connrg_active--;
 	count_remaining = rg->connrg_count;
 	mutex_exit(&rg->connrg_lock);
 	return (count_remaining);
