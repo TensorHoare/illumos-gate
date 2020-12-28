@@ -2898,11 +2898,8 @@ conn_rg_destroy(conn_rg_t *rg)
 }
 
 /*
- * Check if the connection group allow new bindings
- * (i.e. all connections in the group has SO_REUSEPORT enabled),
- * and check if they all have the same effective UID.
- * If both pre-condition is satisfied, add connp
- * into the connection group.
+ * Check if all the connections in rg have the same effective UID.
+ * If true, add connp into the connection group.
  */
 int
 conn_rg_insert(conn_rg_t *rg, conn_t *connp)

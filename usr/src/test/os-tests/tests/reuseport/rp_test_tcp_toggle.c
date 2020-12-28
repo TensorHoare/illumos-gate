@@ -91,7 +91,7 @@ main(void)
 	int optval = 0;
 	if (setsockopt(fda, SOL_SOCKET, SO_REUSEPORT,
 	    &optval, sizeof(optval)) < 0) {
-		perror("setsockopt");
+		perror("setsockopt 0");
 		return (-1);
 	}
 
