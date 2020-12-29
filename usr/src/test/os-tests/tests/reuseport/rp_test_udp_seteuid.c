@@ -48,7 +48,8 @@ bind_socket(int *fd, const struct sockaddr_in *addr)
 	}
 
 	int optval = 1;
-	if (setsockopt(*fd, SOL_SOCKET, SO_REUSEPORT,&optval, sizeof(optval))) {
+	if (setsockopt(*fd, SOL_SOCKET, SO_REUSEPORT,
+	    &optval, sizeof (optval))) {
 		/* setsockopt() fail is an exception */
 		perror("setsockopt");
 		return (1);
@@ -103,7 +104,7 @@ main(void)
 
 			/* write 2 to evfd to indicate exception */
 			uint64_t buf = 2;
-			DONTCARE(write(signal_evfd, &buf, sizeof(buf)));
+			DONTCARE(write(signal_evfd, &buf, sizeof (buf)));
 
 			DONTCARE(close(fd));
 			return (-1);
@@ -111,11 +112,11 @@ main(void)
 
 		/* signal parent that we've bound the socket */
 		uint64_t buf = 1;
-		DONTCARE(write(signal_evfd, &buf, sizeof(buf)));
+		DONTCARE(write(signal_evfd, &buf, sizeof (buf)));
 
 		/* wait for parent signal */
 		buf = 0;
-		DONTCARE(read(exit_evfd, &buf, sizeof(buf)));
+		DONTCARE(read(exit_evfd, &buf, sizeof (buf)));
 		assert(buf == 1);
 
 		DONTCARE(close(fd));
@@ -126,7 +127,7 @@ main(void)
 
 	/* wait for child process to signal  */
 	uint64_t buf = 0;
-	DONTCARE(read(signal_evfd, &buf, sizeof(buf)));
+	DONTCARE(read(signal_evfd, &buf, sizeof (buf)));
 
 	if (buf == 2) {
 		/* exception in child process */
@@ -138,7 +139,7 @@ main(void)
 		perror("seteuid");
 		/* signal child to exit */
 		buf = 1;
-		DONTCARE(write(exit_evfd, &buf, sizeof(buf)));
+		DONTCARE(write(exit_evfd, &buf, sizeof (buf)));
 		return (-1);
 	}
 
@@ -149,7 +150,7 @@ main(void)
 
 	/* signal child to exit */
 	buf = 1;
-	DONTCARE(write(exit_evfd, &buf, sizeof(buf)));
+	DONTCARE(write(exit_evfd, &buf, sizeof (buf)));
 
 	DONTCARE(close(fd));
 
