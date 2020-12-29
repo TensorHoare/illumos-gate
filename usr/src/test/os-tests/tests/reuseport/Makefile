@@ -21,6 +21,7 @@ PROG =	\
 	rp_test_tcp \
 	rp_test_tcp_noopt \
 	rp_test_tcp_toggle \
+	rp_test_tcp_seteuid \
 	rp_test_udp \
 	rp_test_udp_noopt \
 	rp_test_udp_toggle

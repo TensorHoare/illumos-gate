@@ -84,10 +84,12 @@ file path=opt/os-tests/tests/pf_key/eacq-enabler mode=0555
 file path=opt/os-tests/tests/pf_key/kmc-update mode=0555
 file path=opt/os-tests/tests/pf_key/kmc-updater mode=0555
 file path=opt/os-tests/tests/poll_test mode=0555
-file path=opt/os-tests/tests/reuseport/rp_test_noopt mode=0555
 file path=opt/os-tests/tests/reuseport/rp_test_tcp mode=0555
+file path=opt/os-tests/tests/reuseport/rp_test_tcp_noopt mode=0555
 file path=opt/os-tests/tests/reuseport/rp_test_tcp_toggle mode=0555
+file path=opt/os-tests/tests/reuseport/rp_test_tcp_seteuid mode=0555
 file path=opt/os-tests/tests/reuseport/rp_test_udp mode=0555
+file path=opt/os-tests/tests/reuseport/rp_test_udp_noopt mode=0555
 file path=opt/os-tests/tests/reuseport/rp_test_udp_toggle mode=0555
 file path=opt/os-tests/tests/sdevfs/sdevfs_eisdir mode=0555
 file path=opt/os-tests/tests/secflags/addrs-32 mode=0555
