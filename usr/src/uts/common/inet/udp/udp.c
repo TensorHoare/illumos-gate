@@ -5132,33 +5132,6 @@ udp_do_bind(conn_t *connp, struct sockaddr *sa, socklen_t len, cred_t *cr,
 		}
 
 		if (!found_exclbind &&
-		    (connp->conn_reuseaddr && requested_port != 0)) {
-			break;
-		}
-
-		if (udp1 == NULL) {
-			/*
-			 * No other stream has this IP address
-			 * and port number. We can use it.
-			 */
-			if (connp->conn_reuseport &&
-			    (connp->conn_rg_bind == NULL)) {
-				/*
-				 * We are the first in this rg group,
-				 * set up conn_rg_bind
-				 */
-				conn_rg_t *rg = conn_rg_init(connp);
-				if (rg == NULL) {
-					mutex_exit(&udpf->uf_lock);
-					mutex_exit(&connp->conn_lock);
-					return (ENOMEM);
-				}
-				connp->conn_rg_bind = rg;
-			}
-			break;
-		}
-
-		if (!found_exclbind &&
 		    (connp->conn_reuseport && requested_port != 0)) {
 			/*
 			 * We have SO_REUSEPORT set, so attempt to
@@ -5191,6 +5164,34 @@ udp_do_bind(conn_t *connp, struct sockaddr *sa, socklen_t len, cred_t *cr,
 				return (err);
 			}
 		}
+
+		if (!found_exclbind &&
+		    (connp->conn_reuseaddr && requested_port != 0)) {
+			break;
+		}
+
+		if (udp1 == NULL) {
+			/*
+			 * No other stream has this IP address
+			 * and port number. We can use it.
+			 */
+			if (connp->conn_reuseport &&
+			    (connp->conn_rg_bind == NULL)) {
+				/*
+				 * We are the first in this rg group,
+				 * set up conn_rg_bind
+				 */
+				conn_rg_t *rg = conn_rg_init(connp);
+				if (rg == NULL) {
+					mutex_exit(&udpf->uf_lock);
+					mutex_exit(&connp->conn_lock);
+					return (ENOMEM);
+				}
+				connp->conn_rg_bind = rg;
+			}
+			break;
+		}
+
 		mutex_exit(&udpf->uf_lock);
 		if (bind_to_req_port_only) {
 			/*
