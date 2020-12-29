@@ -929,17 +929,7 @@ tcp_bindi(tcp_t *tcp, in_port_t port, const in6_addr_t *laddr,
 				    lconnp->conn_rg_bind, connp);
 				if (err != 0) {
 					mutex_exit(&tbf->tf_lock);
-					switch (err) {
-					case EPERM:
-						*errcode = -TACCES;
-						break;
-					case EINVAL:
-						*errcode = -TSYSERR;
-						break;
-					case ENOMEM:
-						*errcode = -TSYSERR;
-						break;
-					}
+					*errcode = err;
 					return (0);
 				}
 				connp->conn_rg_bind = lconnp->conn_rg_bind;
