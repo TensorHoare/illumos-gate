@@ -5133,7 +5133,7 @@ udp_do_bind(conn_t *connp, struct sockaddr *sa, socklen_t len, cred_t *cr,
 
 		if (!found_exclbind &&
 		    (connp->conn_reuseaddr &&
-		        !connp->conn_reuseport && requested_port != 0)) {
+			!connp->conn_reuseport && requested_port != 0)) {
 			break;
 		}
 
