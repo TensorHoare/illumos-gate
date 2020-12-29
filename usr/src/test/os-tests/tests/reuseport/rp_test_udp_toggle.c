@@ -37,7 +37,7 @@ int
 bind_socket(const struct sockaddr_in *addr)
 {
 	int fd;
-	fd = socket(AF_INET, SOCK_STREAM, 0);
+	fd = socket(AF_INET, SOCK_DGRAM, 0);
 	if (fd < 0) {
 		perror("socket");
 		return (-1);

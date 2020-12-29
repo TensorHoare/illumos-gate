@@ -40,7 +40,7 @@
 int
 bind_socket(int *fd, const struct sockaddr_in *addr)
 {
-	*fd = socket(AF_INET, SOCK_STREAM, 0);
+	*fd = socket(AF_INET, SOCK_DGRAM, 0);
 	if (*fd < 0) {
 		/* socket() fail is an exception. Return 1 to indicate this. */
 		perror("socket");
