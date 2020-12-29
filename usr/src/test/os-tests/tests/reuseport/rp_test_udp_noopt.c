@@ -11,7 +11,7 @@
 
 /* Copyright 2020 Araragi Hokuto */
 
-/* rp_test_noopt.c -- test bind(3SOCKET) without SO_REUSEPORT */
+/* rp_test_udp_noopt.c -- test bind(3SOCKET) without SO_REUSEPORT on UDP */
 
 /*
  * This test creates two AF_INET socket, and try binding them
@@ -35,7 +35,7 @@
 int
 bind_socket(int *fd, const struct sockaddr_in *addr)
 {
-	*fd = socket(AF_INET, SOCK_STREAM, 0);
+	*fd = socket(AF_INET, SOCK_DGRAM, 0);
 	if (*fd < 0) {
 		/*
 		 * Failed to create socket.
