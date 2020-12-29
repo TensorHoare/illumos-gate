@@ -2850,6 +2850,35 @@ conn_get_socket_info(conn_t *connp, mib2_socketInfoEntry_t *sie)
 	return (sie);
 }
 
+/*
+ * SO_REUSEPORT support
+ *
+ * The SO_REUSEPORT option allows multiple socket
+ * to be bound to an identical address, and incoming
+ * connections or datagrams will be distributed among
+ * all the sockets bound to the same address, as per
+ * Linux sematics.
+ *
+ * To support this behaviour, we add conn_rg_t, which
+ * is a local table of all the conn_t belonging to the
+ * same SO_REUSEPORT group. This table will be allocated
+ * when first conn_t gets bind (in tcp_bindi()/udp_do_bind()),
+ * and will be destroyed when the last member of the group
+ * is removed from the bind hash.
+ *
+ * In the ipclassifier, when we find a matching conn_t
+ * for the incoming packet, we check if it's in a SO_REUSEPORT
+ * group (i.e. it's conn_rg_bind pointer is not NULL). If
+ * true, then instead of dispatching the packet to the first
+ * matching conn_t, we try to do load-balancing by picing
+ * a connection from the group, based on a hash value of the
+ * IP 4-tuple.
+ *
+ * The conn_rg_t.connrg_lock is for protecting conn_rg_t
+ * structure, and should only be acquired inside conn_rg_*
+ * funcitons. The conn_rg_bind pointer in conn_t is protected
+ * in the same way as other fields in conn_t.
+ */
 
 /* Max number of members in TCP SO_REUSEPORT group */
 #define	CONN_RG_SIZE_MAX		256
@@ -2913,7 +2942,7 @@ conn_rg_insert(conn_rg_t *rg, conn_t *connp)
 		if (crgetuid(oldcred) != crgetuid(newcred) ||
 		    crgetzoneid(oldcred) != crgetzoneid(newcred)) {
 			mutex_exit(&rg->connrg_lock);
-			return (EPERM);
+			return (EADDRNOTAVAIL);
 		}
 	}
 
@@ -2926,6 +2955,8 @@ conn_rg_insert(conn_rg_t *rg, conn_t *connp)
 			mutex_exit(&rg->connrg_lock);
 			return (EINVAL);
 		}
+
+		/* expand hash table */
 		newmembers = kmem_zalloc(newsize * sizeof (conn_t *),
 		    KM_NOSLEEP|KM_NORMALPRI);
 		if (newmembers == NULL) {

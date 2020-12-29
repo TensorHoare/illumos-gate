@@ -955,7 +955,7 @@ tcp_bindi(tcp_t *tcp, in_port_t port, const in6_addr_t *laddr,
 				conn_rg_t *rg = conn_rg_init(connp);
 				if (rg == NULL) {
 					mutex_exit(&tbf->tf_lock);
-					*errcode = -TSYSERR;
+					*errcode = ENOMEM;
 					return (0);
 				}
 				connp->conn_rg_bind = rg;

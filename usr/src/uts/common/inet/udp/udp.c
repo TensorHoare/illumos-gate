@@ -5151,7 +5151,7 @@ udp_do_bind(conn_t *connp, struct sockaddr *sa, socklen_t len, cred_t *cr,
 				if (rg == NULL) {
 					mutex_exit(&udpf->uf_lock);
 					mutex_exit(&connp->conn_lock);
-					return (-TSYSERR);
+					return (ENOMEM);
 				}
 				connp->conn_rg_bind = rg;
 			}
